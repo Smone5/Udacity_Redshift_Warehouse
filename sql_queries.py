@@ -59,7 +59,7 @@ CREATE TABLE "song_stage" (
 
 songplay_table_create = ("""
 CREATE TABLE "fact_songplay" (
-  "songplay_id" varchar PRIMARY KEY,
+  "songplay_id" bigint PRIMARY KEY,
   "start_time" bigint NOT NULL,
   "user_id" int NOT NULL,
   "level" varchar NOT NULL,
@@ -126,10 +126,10 @@ format as json 's3://udacity-dend/log_json_path.json';
 
 
 staging_songs_copy = ("""
-copy event_stage
-from 's3://udacity-dend/log_data/2018/11/2018'
+copy song_stage
+from 's3://udacity-dend/song_data/'
 credentials 'aws_iam_role={}'
-format as json 's3://udacity-dend/log_json_path.json';
+format as json 'auto';
 """).format(iam_role)
 
 # FINAL TABLES
@@ -137,7 +137,7 @@ format as json 's3://udacity-dend/log_json_path.json';
 songplay_table_insert = ("""
 INSERT INTO fact_songplay(songplay_id, start_time, user_id, level, song_id, artist_id, session_id, location, user_agent)
 SELECT
-    e.userId || st.song_id || e.itemInSession as songplay_id,
+    CAST(e.userId || e.sessionId || e.itemInSession as bigint) as songplay_id,
     CAST(e.ts as bigint) as start_time,
     CAST(e.userId as int) as user_id,
     e.level as level,
@@ -147,9 +147,8 @@ SELECT
     e.location as location,
     e.userAgent as user_agent
 FROM (select * from event_stage where page = 'NextSong') as e
-LEFT JOIN song_stage st
-    ON (e.artist = st.artist_name OR e.song = st.title)
-WHERE song_id <> 'None'
+LEFT JOIN (select distinct title, artist_name, artist_id, duration, song_id from song_stage) as st
+    ON ( e.song = st.title and e.artist = st.artist_name and e.length = st.duration)
 ORDER BY start_time ASC
 """)
 
@@ -217,26 +216,94 @@ ORDER BY time_key ASC;
 """)
 
 
+# Count Rows Queries
+
+song_stage_count = ('''
+SELECT Count(*)
+FROM song_stage
+;
+''')
+
+event_stage_count = ('''
+SELECT Count(*)
+FROM event_stage
+;
+''')
+
+user_table_count = ('''
+SELECT Count(*)
+FROM dim_user
+;
+''')
+
+song_table_count = ('''
+SELECT Count(*)
+FROM dim_song
+;
+''')
+
+artist_table_count =('''
+SELECT Count(*)
+FROM dim_artist
+;
+''')
+
+time_table_count = ('''
+SELECT Count(*)
+FROM dim_time
+;
+''')
+
+
+fact_table_count = ('''
+SELECT Count(*)
+FROM fact_songplay
+;
+''')
+
 # Duplication Check Queries
 
-table_names = ['dim_user', 'dim_song', 'dim_artist', 'dim_time']
 user_table_dups = ('''
 SELECT user_id, first_name, last_name, level, COUNT(*)
-FROM sparkify.dim_user
+FROM dim_user
 GROUP BY user_id, first_name, last_name, level
 ORDER BY COUNT(*) DESC
 LIMIT 5
 ;
 ''')
+
 song_table_dups = ('''
-
+SELECT
+    s.song_id,
+    s.title,
+    COUNT(*)
+FROM dim_song s
+GROUP BY s.song_id, s.title
+ORDER BY COUNT(*) DESC
+LIMIT 5;
 ''')
+
 artist_table_dups =('''
-
+SELECT
+    a.artist_id,
+    a.name,
+    COUNT(*)
+FROM dim_artist a
+GROUP BY a.artist_id, a.name
+ORDER BY COUNT(*) DESC
+LIMIT 5;
 ''')
+
 time_table_dups = ('''
-
+SELECT
+    t.time_key,
+    COUNT(*)
+FROM dim_time t
+GROUP BY t.time_key
+ORDER BY COUNT(*) DESC
+LIMIT 5;
 ''')
+
 
 
 
@@ -246,3 +313,6 @@ create_table_queries = [staging_events_table_create, staging_songs_table_create,
 drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
 copy_table_queries = [staging_events_copy, staging_songs_copy]
 insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
+
+check_duplicate_queries = [user_table_dups, song_table_dups, artist_table_dups, time_table_dups]
+count_rows_queries = [song_stage_count, event_stage_count, user_table_count, song_table_count, artist_table_count, time_table_count, fact_table_count]

@@ -69,7 +69,7 @@ DB_PASSWORD           = config.get("CLUSTER","DB_PASSWORD")
 DB_PORT               = config.get("CLUSTER","DB_PORT")
 
 # Create Redshift Database
-print('Creating Redshift database')
+print('Starting to create Redshift database..')
 try:
     response = redshift.create_cluster(        
         # Parameters for hardware
@@ -94,15 +94,17 @@ except Exception as e:
 
 import time
 starttime=time.time()
-while (redshift.describe_clusters(ClusterIdentifier=DB_HOST)['Clusters'][0] == 'creating') == True:
-    print("Checking every minute for redshift creation...")
+while (redshift.describe_clusters(ClusterIdentifier=DB_HOST)['Clusters'][0]['ClusterStatus'] == 'creating') == True:
+    print("Still creating Redshift database...")
     time.sleep(60.0 - ((time.time() - starttime) % 60.0))
+    
+print("Finished Creating Redshift database")
     
 # Save DB Endpoint and DB ROLE ARN 
 myClusterProps = redshift.describe_clusters(ClusterIdentifier=DB_HOST)['Clusters'][0]
-DB_ENDPOINT = myClusterProps['Endpoint']['Address']
+DB_ENDPOINT = redshift.describe_clusters(ClusterIdentifier=DB_HOST)['Clusters'][0]['Endpoint']['Address']
 DB_ROLE_ARN = myClusterProps['IamRoles'][0]['IamRoleArn']
 
-print("Copy and save DWH_ENDPOINT and  DWH_ROLE_ARN for later")
+print("Copy and save DWH_ENDPOINT and DWH_ROLE_ARN into configuration file")
 print("DWH_ENDPOINT :: ", DB_ENDPOINT)
 print("DWH_ROLE_ARN :: ", DB_ROLE_ARN)

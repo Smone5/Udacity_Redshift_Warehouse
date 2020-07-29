@@ -16,10 +16,6 @@ def insert_tables(cur, conn):
         cur.execute(query)
         conn.commit()
         
-def check_dim_tables(cur, conn):
-    print("Checking for duplicates in dimension tables...")
-    for query in insert_table_queries:
-
 
 def main():
     config = configparser.ConfigParser()
